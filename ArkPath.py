@@ -94,7 +94,7 @@ def calculate_map(M0, max_box=4):
                 # 所有怪物均可到达目标位置，记录箱子摆放方式与结果
                 result.append({
                     'M': M,
-                    'pos': pos,
+                    'pos': set([(x, y) for [x, y] in pos]),
                     'path_list': path_list,
                     'state': tuple([len(all_change_pos & set(path)) % 2 for path in path_list])
                 })
@@ -127,6 +127,7 @@ if __name__ == '__main__':
     1为箱子（可撤退），2为不可破坏地形
     注意到部分地块完全等价，如(H6,H7,G7)，(C7,B7,B8)等。对这部分地块，每组仅保留一个作为可放置地块，其余均置为-2
     '''
+    # 普通
     M1 = np.array([
         [-3,  -2,  0, -1,  0,  -2,  2, -2],
         [ 0,   0,  2,  0,  2,  -2,  2, -2],
@@ -136,7 +137,7 @@ if __name__ == '__main__':
         [ 0,   0,  2,  0,  2,  -2,  2,  0],
         [-3,  -2,  0, -1,  2,  -2,  0, -2]
     ])
-
+    # 突袭
     M2 = np.array([
         [-3,  -2,  0, -1,  0,  -2,  2, -2],
         [ 0,   0,  2,  0,  2,  -2,  2, -2],
@@ -145,23 +146,32 @@ if __name__ == '__main__':
         [-3,   0,  2,  0,  0,  -1,  2, -2],
         [ 0,   0,  2,  0,  2,  -2,  2,  0],
         [-3,  -2,  0, -1,  2,  -2,  0, -2]
-    ])
-    result_1 = calculate_map(M1, 4)
-    result_2 = calculate_map(M2, 4)
-    
-    state_dict_1 = {state: [] for state in product([0, 1], repeat=4)}
-    for i, info in enumerate(result_1):
-        state_dict_1[info['state']].append(i)
-    plt.figure(figsize=(12, 4))
-    for i, state in enumerate([(1, 1, 1, 1), (0, 0, 0, 0), (1, 0, 0, 1)]):
-        i_tmp = minimal_by(state_dict_1[state], lambda i: len(result_1[i]['pos']))
-        plot_path(**result_1[i_tmp], subplot_args=(1, 3, i+1))
-
-    state_dict_2 = {state: [] for state in product([0, 1], repeat=4)}
-    for i, info in enumerate(result_2):
-        state_dict_2[info['state']].append(i)
-    plt.figure(figsize=(12, 4))
-    for i, state in enumerate([(1, 1, 1, 1), (0, 0, 0, 0), (1, 0, 0, 1)]):
-        i_tmp = minimal_by(state_dict_2[state], lambda i: len(result_2[i]['pos']))
-        plot_path(**result_2[i_tmp], subplot_args=(1, 3, i+1))
-    plt.show()
+    ])    
+    for case, M0 in enumerate([M1, M2]):
+        result = calculate_map(M0, 4)
+        state_dict = {state: [] for state in product([0, 1], repeat=4)}
+        for i, info in enumerate(result):
+            state_dict[info['state']].append(i)
+        plt.figure(figsize=(16, 16))
+        for i, state in enumerate(product([0, 1], repeat=4)):
+            if len(state_dict[state]) > 0:
+                i_tmp = minimal_by(state_dict[state], lambda i: len(result[i]['pos']))
+                plot_path(**result[i_tmp], subplot_args=(4, 4, i+1))
+        plt.savefig('case-%d_各状态最优解.png' % case, dpi=120, bbox_inches="tight")
+        node_list = [state_dict[state] for state in [(1, 1, 1, 1), (0, 0, 0, 0), (1, 0, 0, 1)]]
+        # 初始状态到节点最短距离和对应的前置节点
+        pre_dict = {}
+        for i in node_list[0]:
+            pre_dict[i] = (len(result[i]['pos']), [-1])
+        for k in range(1, len(node_list)):
+            for i in node_list[k]:
+                tmp = [(j, pre_dict[j][0] + len(result[j]['pos'] - result[i]['pos']))
+                       for j in node_list[k-1]]
+                min_distance = min([distance for (j, distance) in tmp])
+                pre_dict[i] = (min_distance, [j for (j, distance) in tmp if distance == min_distance])
+        plt.figure(figsize=(12, 4))
+        node = minimal_by(node_list[-1], lambda i: pre_dict[i][0])
+        for k in reversed(range(len(node_list))):
+            plot_path(**result[node], subplot_args=(1, 3, k+1))
+            node = pre_dict[node][1][0]
+        plt.savefig('case-%d_整体最优解.png' % case, dpi=120, bbox_inches="tight")
